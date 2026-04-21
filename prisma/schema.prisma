@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PurchaseStatus {
+  ORDERED
+  RECEIVED
+  PARTIAL
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum StockReferenceType {
+  PURCHASE
+  SALE
+  ADJUSTMENT
+}
+
+enum DeliveryStatus {
+  PENDING
+  IN_TRANSIT
+  RECEIVED
+  PARTIAL
+  CANCELLED
+}
+
+model Item {
+  id             String          @id @default(uuid())
+  name           String
+  category       String
+  unit           String
+  costPrice      Decimal         @map("cost_price") @db.Decimal(12, 2)
+  sellingPrice   Decimal         @map("selling_price") @db.Decimal(12, 2)
+  minStockLevel  Decimal         @map("min_stock_level") @db.Decimal(12, 2)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  createdBy      String          @default("system") @map("created_by")
+  updatedBy      String          @default("system") @map("updated_by")
+  purchaseItems  PurchaseItem[]
+  stockMovements StockMovement[]
+  inventory      Inventory?
+  deliveryItems  DeliveryItem[]
+
+  @@unique([name, category], map: "items_name_category_key")
+  @@map("items")
+}
+
+model Supplier {
+  id        String     @id @default(uuid())
+  name      String
+  phone     String
+  address   String
+  createdAt DateTime   @default(now()) @map("created_at")
+  createdBy String     @default("system") @map("created_by")
+  updatedBy String     @default("system") @map("updated_by")
+  purchases Purchase[]
+  deliveries Delivery[]
+
+  @@map("suppliers")
+}
+
+model Purchase {
+  id           String         @id @default(uuid())
+  supplierId   String         @map("supplier_id")
+  supplier     Supplier       @relation(fields: [supplierId], references: [id])
+  orderDate    DateTime       @map("order_date")
+  deliveryDate DateTime?      @map("delivery_date")
+  receivedDate DateTime?      @map("received_date")
+  status       PurchaseStatus @default(ORDERED)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  createdBy    String         @default("system") @map("created_by")
+  updatedBy    String         @default("system") @map("updated_by")
+  items        PurchaseItem[]
+  deliveries   Delivery[]
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id         String   @id @default(uuid())
+  purchaseId String   @map("purchase_id")
+  itemId     String   @map("item_id")
+  quantity   Decimal  @db.Decimal(12, 2)
+  costPrice  Decimal  @map("cost_price") @db.Decimal(12, 2)
+  createdBy  String   @default("system") @map("created_by")
+  purchase   Purchase @relation(fields: [purchaseId], references: [id])
+  item       Item     @relation(fields: [itemId], references: [id])
+
+  @@map("purchase_items")
+}
+
+model StockMovement {
+  id            String             @id @default(uuid())
+  itemId         String             @map("item_id")
+  item           Item               @relation(fields: [itemId], references: [id])
+  type           StockMovementType
+  quantity       Decimal            @db.Decimal(12, 2)
+  referenceType  StockReferenceType @map("reference_type")
+  referenceId    String             @map("reference_id")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  createdBy      String             @default("system") @map("created_by")
+
+  @@map("stock_movements")
+}
+
+model Delivery {
+  id            String         @id @default(uuid())
+  purchaseId    String         @map("purchase_id")
+  supplierId    String         @map("supplier_id")
+  buyerId       String         @map("buyer_id")
+  shopId        String         @map("shop_id")
+  vehicleType   String         @map("vehicle_type")
+  vehicleNumber String         @map("vehicle_number")
+  driverName    String         @map("driver_name")
+  driverPhone   String         @map("driver_phone")
+  status        DeliveryStatus @default(PENDING)
+  deliveredAt   DateTime?      @map("delivered_at")
+  receivedAt    DateTime?      @map("received_at")
+  notes         String?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  createdBy     String         @default("system") @map("created_by")
+  updatedBy     String         @default("system") @map("updated_by")
+  purchase      Purchase       @relation(fields: [purchaseId], references: [id])
+  supplier      Supplier       @relation(fields: [supplierId], references: [id])
+  items         DeliveryItem[]
+
+  @@map("deliveries")
+}
+
+model DeliveryItem {
+  id           String   @id @default(uuid())
+  deliveryId   String   @map("delivery_id")
+  itemId       String   @map("item_id")
+  orderedQty   Decimal  @map("ordered_qty") @db.Decimal(12, 2)
+  deliveredQty Decimal  @map("delivered_qty") @db.Decimal(12, 2)
+  acceptedQty  Decimal  @map("accepted_qty") @db.Decimal(12, 2)
+  damagedQty   Decimal  @default(0) @map("damaged_qty") @db.Decimal(12, 2)
+  remarks      String?
+  createdBy    String   @default("system") @map("created_by")
+  delivery     Delivery @relation(fields: [deliveryId], references: [id])
+  item         Item     @relation(fields: [itemId], references: [id])
+
+  @@map("delivery_items")
+}
+
+model Inventory {
+  itemId       String   @id @map("item_id")
+  item         Item     @relation(fields: [itemId], references: [id])
+  currentStock Decimal  @default(0) @map("current_stock") @db.Decimal(12, 2)
+  lastUpdated  DateTime @default(now()) @updatedAt @map("last_updated")
+  createdBy    String   @default("system") @map("created_by")
+  updatedBy    String   @default("system") @map("updated_by")
+
+  @@map("inventory")
+}
